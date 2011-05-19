@@ -98,15 +98,27 @@ static void audio_callback(void *userdata, Uint8 *stream_orig, int len) {
 int16_t *makeSinTable() {
   static int16_t table[65536];
   for (int i = 0 ; i < 65536 ; ++i) {
-    table[i] = INT16_MAX * sin(i * 2 * M_PI / 65536.0);
+    table[i] = INT16_MAX * sin(i * 2 * M_PI / INT16_MAX);
   }
   return table;
 }
 
 int16_t *makeNoiseTable() {
   static int16_t table[65536];
-  for (int i = 0 ; i < 65536 ; ++i) {
-    table[i] = rand() & 0xffff;
+  for (int i = 0 ; i < 65536 ; i += 2) {
+    double u1 = (double)random() / RAND_MAX;
+    double u2 = (double)random() / RAND_MAX;
+    // Box-Muller transform
+    double nat1 = sqrt(-2 * log(u1)) * cos(2 * M_PI * u2);
+    double nat2 = sqrt(-2 * log(u1)) * sin(2 * M_PI * u2);
+    int val1 = nat1 * (INT16_MAX / 4);
+    if (val1 < INT16_MIN) val1 = INT16_MIN;
+    if (val1 > INT16_MAX) val1 = INT16_MAX;
+    int val2 = nat2 * (INT16_MAX / 4);
+    if (val2 < INT16_MIN) val2 = INT16_MIN;
+    if (val2 > INT16_MAX) val2 = INT16_MAX;
+    table[i] = val1;
+    table[i + 1] = val2;
   }
   return table;
 }
@@ -159,7 +171,7 @@ int main(int argc, char ** argv) {
   Oscillator sinOscillator(makeSinTable());
   NoiseOscillator noiseOscillator(makeNoiseTable());
   callbackData.oscillator[0] = &sinOscillator;
-  callbackData.oscillator[0]->volume = (int)(0.0 * 65535);
+  callbackData.oscillator[0]->volume = (int)(0.20 * 65535);
   callbackData.setFrequency(0, 440);
   callbackData.oscillator[1] = &noiseOscillator;
   callbackData.oscillator[1]->volume = (int)(0.50 * 65535);
@@ -171,6 +183,7 @@ int main(int argc, char ** argv) {
   bool running = true;
 
   while (running) {
+    callbackData.setFrequency(0, (int)(440.0 * pow(2.0, ((callbackData.tick >> 14) - 49.0) / 12.0)));
     callbackData.setFrequency(1, (int)(440.0 * pow(2.0, ((callbackData.tick >> 14) - 49.0) / 12.0)));
     while (SDL_PollEvent(&event)) {
       switch( event.type ) {
