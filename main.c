@@ -129,8 +129,8 @@ int main() {
     oscillators[0].frequencyControl = loop[loopPosition] << 4;
     oscillators[1].frequencyControl = loop[loopPosition] << 4;
     uint8_t tempo = adc_read(TEMPO_PORT);
-    for (int i = 0 ; i < (255 - tempo) ; ++i) {
-      for (int j = 0 ; j < 256 * 4 ; ++j) {
+    for (uint16_t i = 0 ; i < 65535 / (tempo + 16) ; ++i) {
+      for (int j = 0 ; j < 128 ; ++j) {
 	nop();
       }
     }

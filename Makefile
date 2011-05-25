@@ -1,5 +1,5 @@
 CC=/usr/bin/avr-gcc
-CFLAGS=-std=c99 -g -Os -Wall -mcall-prologues -mmcu=atmega88 -I/usr/avr/include -Wl,-L/usr/lib64/binutils/avr/2.19.1 -DF_CPU=16000000UL
+CFLAGS=-std=c99 -g -Os -Wall -Wextra -mcall-prologues -mmcu=atmega88 -I/usr/avr/include -Wl,-L/usr/lib64/binutils/avr/2.19.1 -DF_CPU=16000000UL
 OBJ2HEX=/usr/bin/avr-objcopy
 UISP=/usr/bin/uisp
 AVRPORT=/dev/ttyUSB0
