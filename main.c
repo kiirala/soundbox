@@ -24,6 +24,7 @@ uint8_t adc_read(uint8_t channel) {
 
 #define PITCH_PORT ((0 << MUX3) | (0 << MUX2) | (0 << MUX1) | (0 << MUX0))
 #define TEMPO_PORT ((0 << MUX3) | (0 << MUX2) | (0 << MUX1) | (1 << MUX0))
+#define ARPEG_PORT ((0 << MUX3) | (0 << MUX2) | (1 << MUX1) | (0 << MUX0))
 #define TEMPO_LED PORTB1
 
 struct Oscillator {
@@ -60,21 +61,16 @@ ISR(TIMER0_OVF_vect) {
 uint8_t randomTable[256];
 uint8_t sinTable[256];
 
-#define LOOP_LENGTH 64
-uint8_t loop[64];
+#define LOOP_LENGTH 128
+uint8_t loop[LOOP_LENGTH * 2];
 
 int main() {
   wdt_disable();
 
-  DDRB = 0xff;
-  DDRD = (1 << DDD6);
-  PORTD = (1 << PORTD0);
-  PORTB = 0xff;
-
   for (int i = 0 ; i < OSCILLATOR_COUNT ; ++i) {
     oscillators[i].value = 0;
     oscillators[i].frequencyControl = 0;
-    oscillators[i].volume = 0xff;
+    oscillators[i].volume = 0x7f;
     oscillators[i].overflowCount = 0;
   }
 
@@ -100,8 +96,19 @@ int main() {
   }
   oscillators[0].pacTable = sinTable;
 
+  DDRB = 0xff;
+  DDRD = (1 << DDD6);
+  PORTB = 0xff;
+
+  // Set pins connected to buttons as inputs
+  CLEAR_BIT(DDRD, DDD0);
+  CLEAR_BIT(DDRD, DDD1);
+  // Enable internal pull-up resistors on buttons
+  SET_BIT(PORTD, PORTD0);
+  SET_BIT(PORTD, PORTD1);
+  
   // Disable digital input buffers on ADC channels.
-  DIDR0 = (1 << ADC1D) | (1 << ADC0D);
+  DIDR0 = (1 << ADC2D) | (1 << ADC1D) | (1 << ADC0D);
   // Enable ADC
   ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 
@@ -120,14 +127,31 @@ int main() {
 
   int loopPosition = 0;
   while (1) {
-    if (loopPosition == 0) PORTB = (1 << PORTB1);
-    else PORTB = 0;
+    if (loopPosition == 0)
+      PORTB = (0 << PORTB2) | (0 << PORTB1) | (0 << PORTB0);
+    else if (loopPosition == LOOP_LENGTH / 4)
+      PORTB = (1 << PORTB2) | (1 << PORTB1) | (0 << PORTB0);
+    else if (loopPosition == LOOP_LENGTH / 2)
+      PORTB = (1 << PORTB2) | (1 << PORTB1) | (0 << PORTB0);
+    else if (loopPosition == LOOP_LENGTH / 2 + LOOP_LENGTH / 4)
+      PORTB = (1 << PORTB2) | (1 << PORTB1) | (0 << PORTB0);
+    else
+      PORTB = (1 << PORTB2) | (1 << PORTB1) | (1 << PORTB0);      
     uint8_t pitch = adc_read(PITCH_PORT);
+    uint8_t arpeg = adc_read(ARPEG_PORT);
     if (!(PIND & (1 << PIND0))) {
-      loop[loopPosition] = pitch;
+      if (loopPosition & 1) {
+	loop[loopPosition] = (pitch >> 1) + (arpeg >> 2) + 32;
+      }
+      else {
+	loop[loopPosition] = (pitch >> 1) + 32;
+      }
+    }
+    if (!(PIND & (1 << PIND1))) {
+      loop[loopPosition + LOOP_LENGTH] = pitch;
     }
     oscillators[0].frequencyControl = loop[loopPosition] << 4;
-    oscillators[1].frequencyControl = loop[loopPosition] << 4;
+    oscillators[1].frequencyControl = loop[loopPosition + LOOP_LENGTH] << 4;
     uint8_t tempo = adc_read(TEMPO_PORT);
     for (uint16_t i = 0 ; i < 65535 / (tempo + 16) ; ++i) {
       for (int j = 0 ; j < 128 ; ++j) {
